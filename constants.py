@@ -1,0 +1,38 @@
+import pygame
+
+# Dimensiones
+SCREEN_WIDTH, SCREEN_HEIGHT = 1200, 800
+FPS = 60
+STATE_MENU = "MENU"
+STATE_PLAYING = "PLAYING"
+STATE_LEVEL_SELECT = "LEVEL_SELECT"
+STATE_HEURISTIC_CONFIG = "HEURISTIC_CONFIG"
+STATE_AUTOPLAY = "AUTOPLAY"
+
+# Colores (Paleta moderna)
+COLOR_BG = (25, 25, 35)
+COLOR_WALL = (60, 60, 80)
+COLOR_PLAYER = (0, 200, 255)
+COLOR_BOX = (200, 150, 50)
+COLOR_TARGET = (50, 200, 50)
+COLOR_HOLE = (15, 15, 20)
+COLOR_HONEY = (255, 190, 0)
+COLOR_ICE = (180, 240, 255)
+COLOR_LAVA = (255, 50, 0)
+COLOR_TEXT = (240, 240, 240)
+COLOR_BTN = (50, 50, 70)
+COLOR_BTN_HOVER = (80, 80, 110)
+COLOR_BTN_ACTIVE = (110, 100, 160)
+
+# Mapeo de caracteres
+TILES = {
+    'W': 'WALL',
+    'P': 'PLAYER',
+    'B': 'BOX',
+    'T': 'TARGET',
+    'H': 'HOLE',
+    'M': 'HONEY',
+    'I': 'ICE',
+    'L': 'LAVA',
+    '.': 'FLOOR'
+}
