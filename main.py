@@ -7,7 +7,7 @@ from constants import *
 from engine import SokobanEngine
 
 
-HEURISTIC_MODES = {
+MODOS_HEURISTICA = {
     "min_time": {
         "label": "Minimizar tiempo",
         "goal": "min",
@@ -22,490 +22,513 @@ HEURISTIC_MODES = {
     },
 }
 
-LEVEL_SEARCH_LIMITS = {
+LIMITES_BUSQUEDA_NIVELES = {
     "min_time": {"max_nodes": 500000, "max_time": 45.0, "max_depth": 3000},
     "min_moves": {"max_nodes": 500000, "max_time": 45.0, "max_depth": 3000},
     "max_points": {"max_nodes": 500000, "max_time": 45.0, "max_depth": 3000},
 }
 
 
-def draw_text(screen, text, font, color, x, y):
-    surf = font.render(text, True, color)
-    rect = surf.get_rect(center=(x, y))
-    screen.blit(surf, rect)
+def dibujar_texto(pantalla, texto, fuente, color, x, y):
+    superficie = fuente.render(texto, True, color)
+    rectangulo = superficie.get_rect(center=(x, y))
+    pantalla.blit(superficie, rectangulo)
 
 
-def draw_button(screen, text, font, x, y, w, h, mouse_pos, active=False):
-    rect = pygame.Rect(x - w // 2, y - h // 2, w, h)
-    if active:
+def dibujar_boton(pantalla, texto, fuente, x, y, ancho, alto, posicion_mouse, activo=False):
+    rectangulo = pygame.Rect(x - ancho // 2, y - alto // 2, ancho, alto)
+    if activo:
         color = COLOR_BTN_ACTIVE
     else:
-        color = COLOR_BTN_HOVER if rect.collidepoint(mouse_pos) else COLOR_BTN
-    pygame.draw.rect(screen, color, rect, border_radius=10)
-    pygame.draw.rect(screen, COLOR_TEXT, rect, 2, border_radius=10)
-    draw_text(screen, text, font, COLOR_TEXT, x, y)
-    return rect
+        color = COLOR_BTN_HOVER if rectangulo.collidepoint(posicion_mouse) else COLOR_BTN
+    pygame.draw.rect(pantalla, color, rectangulo, border_radius=10)
+    pygame.draw.rect(pantalla, COLOR_TEXT, rectangulo, 2, border_radius=10)
+    dibujar_texto(pantalla, texto, fuente, COLOR_TEXT, x, y)
+    return rectangulo
 
 
-def draw_panel(screen, x, y, w, h):
-    rect = pygame.Rect(x, y, w, h)
-    pygame.draw.rect(screen, (40, 40, 55), rect, border_radius=20)
-    pygame.draw.rect(screen, COLOR_BTN, rect, 2, border_radius=20)
+def dibujar_panel(pantalla, x, y, ancho, alto):
+    rectangulo = pygame.Rect(x, y, ancho, alto)
+    pygame.draw.rect(pantalla, (40, 40, 55), rectangulo, border_radius=20)
+    pygame.draw.rect(pantalla, COLOR_BTN, rectangulo, 2, border_radius=20)
 
 
-def get_heuristic_label(mode):
-    return HEURISTIC_MODES.get(mode, HEURISTIC_MODES["min_time"])["label"]
+def obtener_etiqueta_heuristica(modo):
+    return MODOS_HEURISTICA.get(modo, MODOS_HEURISTICA["min_time"])["label"]
 
 
-def is_maximizing(mode):
-    return HEURISTIC_MODES.get(mode, HEURISTIC_MODES["min_time"])["goal"] == "max"
+def es_maximizador(modo):
+    return MODOS_HEURISTICA.get(modo, MODOS_HEURISTICA["min_time"])["goal"] == "max"
 
 
-def evaluate_heuristic(engine, mode, depth=0):
-    box_positions = {tuple(b) for b in engine.boxes}
-    target_positions = [tuple(t) for t in engine.targets]
-    collected_points = {tuple(p) for p in engine.points_collected}
+def evaluar_heuristica(motor, modo, profundidad=0):
+    posiciones_cajas = {tuple(caja) for caja in motor.boxes}
+    posiciones_objetivos = [tuple(objetivo) for objetivo in motor.targets]
+    puntos_recolectados = {tuple(punto) for punto in motor.points_collected}
 
-    total_points = len(engine.points_coords)
-    points_collected = len(collected_points)
-    remaining_points = total_points - points_collected
+    total_puntos = len(motor.points_coords)
+    puntos_recolectados_count = len(puntos_recolectados)
+    puntos_restantes = total_puntos - puntos_recolectados_count
 
-    box_distance = 0
-    if target_positions:
-        for box in box_positions:
-            box_distance += min(abs(box[0] - t[0]) + abs(box[1] - t[1]) for t in target_positions)
-
-    player_to_box = 0
-    if box_positions:
-        p = tuple(engine.player_pos)
-        player_to_box = min(abs(p[0] - b[0]) + abs(p[1] - b[1]) for b in box_positions)
-
-    # 🔥 Heurísticas corregidas según objetivo REAL
-    if mode == "min_moves":
-        # penaliza fuertemente cada paso
-        return depth * 20 + box_distance * 25 + player_to_box * 8
-
-    if mode == "max_points":
-        # recompensa puntos y luego completar
-        return -(points_collected * 2000) + box_distance * 10 + player_to_box * 3 + depth * 5
-
-    # min_time → similar a movimientos pero más agresivo
-    return depth * 15 + box_distance * 20 + player_to_box * 6
-
-
-def priority_from_score(score, mode):
-    return -score if is_maximizing(mode) else score
-
-
-def is_better(score, best_score, mode):
-    if is_maximizing(mode):
-        return score > best_score
-    return score < best_score
-
-
-def path_to_string(path):
-    dir_map = {(-1, 0): 'U', (1, 0): 'D', (0, -1): 'L', (0, 1): 'R'}
-    return '-'.join(dir_map.get(move, '?') for move in path)
-
-
-def find_greedy_solution(start_engine, mode, max_nodes=100000, max_time=20.0, max_depth=1000):
-    directions = [(-1, 0), (1, 0), (0, -1), (0, 1)]
-    start_time = time.time()
-
-    pq = []
-    node_id = 0
-    nodes_explored = 0
-
-    start_score = evaluate_heuristic(start_engine, mode, depth=0)
-    heapq.heappush(
-        pq,
-        (priority_from_score(start_score, mode), 0, node_id, start_engine.clone(), [])
-    )
-
-    best_seen = {start_engine.state_key(): start_score}
-
-    while pq and nodes_explored < max_nodes and (time.time() - start_time) < max_time:
-        _, depth, _, node, path = heapq.heappop(pq)
-        nodes_explored += 1
-
-        if node.level_won:
-            return path, nodes_explored, node
-
-        if depth >= max_depth:
-            continue
-
-        for dr, dc in directions:
-            child = node.clone()
-            child.move(dr, dc)
-
-            if child.player_pos == node.player_pos and child.boxes == node.boxes:
-                continue
-
-            if child.is_dead:
-                continue
-
-            key = child.state_key()
-            score = evaluate_heuristic(child, mode, depth + 1)
-
-            if key in best_seen and not is_better(score, best_seen[key], mode):
-                continue
-
-            best_seen[key] = score
-
-            if child.level_won:
-                return path + [(dr, dc)], nodes_explored, child
-
-            node_id += 1
-            heapq.heappush(
-                pq,
-                (priority_from_score(score, mode), depth + 1, node_id, child, path + [(dr, dc)])
+    distancia_cajas = 0
+    if posiciones_objetivos:
+        for caja in posiciones_cajas:
+            distancia_cajas += min(
+                abs(caja[0] - objetivo[0]) + abs(caja[1] - objetivo[1])
+                for objetivo in posiciones_objetivos
             )
 
-    return None, nodes_explored, None
+    jugador_a_caja = 0
+    if posiciones_cajas:
+        posicion_jugador = tuple(motor.player_pos)
+        jugador_a_caja = min(
+            abs(posicion_jugador[0] - caja[0]) + abs(posicion_jugador[1] - caja[1])
+            for caja in posiciones_cajas
+        )
+
+    if modo == "min_moves":
+        return profundidad * 20 + distancia_cajas * 25 + jugador_a_caja * 8
+
+    if modo == "max_points":
+        # Ahora sí: más puntos = mejor puntaje
+        # La prioridad ya se invierte en prioridad_desde_puntaje(),
+        # así que aquí debe ser un valor mayor para estados mejores.
+        return (
+            puntos_recolectados_count * 2000
+            - distancia_cajas * 10
+            - jugador_a_caja * 3
+            - profundidad * 5
+        )
+
+    return profundidad * 15 + distancia_cajas * 20 + jugador_a_caja * 6
+
+def prioridad_desde_puntaje(puntaje, modo):
+    return -puntaje if es_maximizador(modo) else puntaje
 
 
-def calculate_solution_cost(final_state, path, mode):
-    if mode == "min_moves":
-        return len(path), f"Movimientos: {len(path)}"
+def es_mejor(puntaje, mejor_puntaje, modo):
+    if es_maximizador(modo):
+        return puntaje > mejor_puntaje
+    return puntaje < mejor_puntaje
 
-    if mode == "min_time":
-        estimated_time_ms = len(path) * 130
-        estimated_time_s = estimated_time_ms / 1000
-        return estimated_time_s, f"Tiempo estimado: {estimated_time_s:.2f}s ({len(path)} pasos)"
 
-    if mode == "max_points":
-        if final_state:
-            points_collected = len(final_state.points_collected)
-            total_points = len(final_state.points_coords)
-            return points_collected, f"Puntos: {points_collected}/{total_points} | Pasos: {len(path)}"
-        return 0, f"Pasos: {len(path)}"
+def ruta_a_cadena(ruta):
+    mapa_direcciones = {(-1, 0): 'U', (1, 0): 'D', (0, -1): 'L', (0, 1): 'R'}
+    return '-'.join(mapa_direcciones.get(movimiento, '?') for movimiento in ruta)
 
-    return 0, f"Pasos: {len(path)}"
+
+def encontrar_solucion_voraz(motor_inicial, modo, max_nodos=100000, max_tiempo=20.0, max_profundidad=1000):
+    direcciones = [(-1, 0), (1, 0), (0, -1), (0, 1)]
+    tiempo_inicio = time.time()
+
+    cola_prioridad = []
+    id_nodo = 0
+    nodos_explorados = 0
+
+    puntaje_inicial = evaluar_heuristica(motor_inicial, modo, profundidad=0)
+    heapq.heappush(
+        cola_prioridad,
+        (prioridad_desde_puntaje(puntaje_inicial, modo), 0, id_nodo, motor_inicial.clone(), [])
+    )
+
+    mejor_visto = {motor_inicial.state_key(): puntaje_inicial}
+
+    mejor_solucion = None
+    mejor_estado = None
+    mejor_puntaje = float("-inf")
+
+    while cola_prioridad and nodos_explorados < max_nodos and (time.time() - tiempo_inicio) < max_tiempo:
+        _, profundidad, _, nodo, ruta = heapq.heappop(cola_prioridad)
+        nodos_explorados += 1
+
+        if nodo.level_won:
+            if modo == "max_points":
+                puntaje_actual = len(nodo.points_collected)
+
+                if puntaje_actual > mejor_puntaje:
+                    mejor_puntaje = puntaje_actual
+                    mejor_solucion = ruta
+                    mejor_estado = nodo
+
+                # NO hacemos return, seguimos buscando mejores
+            else:
+                return ruta, nodos_explorados, nodo
+
+        if profundidad >= max_profundidad:
+            continue
+
+        for dr, dc in direcciones:
+            hijo = nodo.clone()
+            hijo.move(dr, dc)
+
+            if hijo.player_pos == nodo.player_pos and hijo.boxes == nodo.boxes:
+                continue
+
+            if hijo.is_dead:
+                continue
+
+            clave = hijo.state_key()
+            puntaje = evaluar_heuristica(hijo, modo, profundidad + 1)
+
+            if clave in mejor_visto and not es_mejor(puntaje, mejor_visto[clave], modo):
+                continue
+
+            mejor_visto[clave] = puntaje
+
+            id_nodo += 1
+            heapq.heappush(
+                cola_prioridad,
+                (prioridad_desde_puntaje(puntaje, modo), profundidad + 1, id_nodo, hijo, ruta + [(dr, dc)])
+            )
+
+    if modo == "max_points" and mejor_solucion is not None:
+        return mejor_solucion, nodos_explorados, mejor_estado
+
+    return None, nodos_explorados, None
+
+
+def calcular_costo_solucion(estado_final, ruta, modo):
+    if modo == "min_moves":
+        return len(ruta), f"Movimientos: {len(ruta)}"
+
+    if modo == "min_time":
+        tiempo_estimado_ms = len(ruta) * 130
+        tiempo_estimado_s = tiempo_estimado_ms / 1000
+        return tiempo_estimado_s, f"Tiempo estimado: {tiempo_estimado_s:.2f}s ({len(ruta)} pasos)"
+
+    if modo == "max_points":
+        if estado_final:
+            puntos_recolectados = len(estado_final.points_collected)
+            total_puntos = len(estado_final.points_coords)
+            return puntos_recolectados, f"Puntos: {puntos_recolectados}/{total_puntos} | Pasos: {len(ruta)}"
+        return 0, f"Pasos: {len(ruta)}"
+
+    return 0, f"Pasos: {len(ruta)}"
 
 
 def main():
     pygame.init()
-    screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+    pantalla = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
     pygame.display.set_caption("Sokoban Ultimate Edition")
-    clock = pygame.time.Clock()
+    reloj = pygame.time.Clock()
 
-    background = pygame.image.load("assets/bg1.png")
-    background = pygame.transform.scale(background, (SCREEN_WIDTH, SCREEN_HEIGHT))
+    fondo = pygame.image.load("assets/bg1.png")
+    fondo = pygame.transform.scale(fondo, (SCREEN_WIDTH, SCREEN_HEIGHT))
 
-    title_font = pygame.font.SysFont("Verdana", 80, bold=True)
-    config_title_font = pygame.font.SysFont("Verdana", 46, bold=True)
-    menu_font = pygame.font.SysFont("Verdana", 25, bold=True)
-    small_font = pygame.font.SysFont("Verdana", 18)
-    level_num_font = pygame.font.SysFont("Verdana", 20, bold=True)
+    fuente_titulo = pygame.font.SysFont("Verdana", 80, bold=True)
+    fuente_titulo_config = pygame.font.SysFont("Verdana", 46, bold=True)
+    fuente_menu = pygame.font.SysFont("Verdana", 25, bold=True)
+    fuente_pequena = pygame.font.SysFont("Verdana", 18)
+    fuente_numero_nivel = pygame.font.SysFont("Verdana", 20, bold=True)
 
-    game = SokobanEngine()
-    current_state = STATE_MENU
-    selected_mode = "min_time"
+    juego = SokobanEngine()
+    estado_actual = STATE_MENU
+    modo_seleccionado = "min_time"
 
-    auto_state = {
-        'path': [],
-        'step': 0,
-        'searching': False,
-        'level': 1,
-        'message': "",
-        'next_move_time': 0,
-        'nodes': 0,
-        'final_state': None,
-        'level_complete_until': 0,
-        'pending_next_level': False,
-        'completion_text': "",
+    estado_auto = {
+        'ruta': [],
+        'paso': 0,
+        'buscando': False,
+        'nivel': 1,
+        'mensaje': "",
+        'tiempo_siguiente_movimiento': 0,
+        'nodos': 0,
+        'estado_final': None,
+        'tiempo_fin_nivel': 0,
+        'pendiente_siguiente_nivel': False,
+        'texto_completado': "",
     }
 
     while True:
-        mouse_pos = pygame.mouse.get_pos()
+        posicion_mouse = pygame.mouse.get_pos()
 
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
+        for evento in pygame.event.get():
+            if evento.type == pygame.QUIT:
                 pygame.quit()
                 sys.exit()
 
-            if current_state == STATE_MENU:
-                if event.type == pygame.MOUSEBUTTONDOWN:
+            if estado_actual == STATE_MENU:
+                if evento.type == pygame.MOUSEBUTTONDOWN:
                     btn_jugar = pygame.Rect(SCREEN_WIDTH // 2 - 100, 330, 200, 50)
                     btn_heuristica = pygame.Rect(SCREEN_WIDTH // 2 - 100, 410, 200, 50)
                     btn_niveles = pygame.Rect(SCREEN_WIDTH // 2 - 100, 490, 200, 50)
 
-                    if btn_jugar.collidepoint(event.pos):
-                        current_state = STATE_PLAYING
-                    elif btn_heuristica.collidepoint(event.pos):
-                        current_state = STATE_HEURISTIC_CONFIG
-                    elif btn_niveles.collidepoint(event.pos):
-                        current_state = STATE_LEVEL_SELECT
+                    if btn_jugar.collidepoint(evento.pos):
+                        estado_actual = STATE_PLAYING
+                    elif btn_heuristica.collidepoint(evento.pos):
+                        estado_actual = STATE_HEURISTIC_CONFIG
+                    elif btn_niveles.collidepoint(evento.pos):
+                        estado_actual = STATE_LEVEL_SELECT
 
-            elif current_state == STATE_HEURISTIC_CONFIG:
-                if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-                    current_state = STATE_MENU
+            elif estado_actual == STATE_HEURISTIC_CONFIG:
+                if evento.type == pygame.KEYDOWN and evento.key == pygame.K_ESCAPE:
+                    estado_actual = STATE_MENU
 
-                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                    btn_min_time = pygame.Rect(SCREEN_WIDTH // 2 - 390, 360 - 28, 250, 58)
-                    btn_min_moves = pygame.Rect(SCREEN_WIDTH // 2 - 125, 360 - 28, 250, 58)
-                    btn_max_points = pygame.Rect(SCREEN_WIDTH // 2 + 140, 360 - 28, 250, 58)
+                if evento.type == pygame.MOUSEBUTTONDOWN and evento.button == 1:
+                    btn_min_tiempo = pygame.Rect(SCREEN_WIDTH // 2 - 390, 360 - 28, 250, 58)
+                    btn_min_movs = pygame.Rect(SCREEN_WIDTH // 2 - 125, 360 - 28, 250, 58)
+                    btn_max_puntos = pygame.Rect(SCREEN_WIDTH // 2 + 140, 360 - 28, 250, 58)
                     btn_iniciar = pygame.Rect(SCREEN_WIDTH // 2 - 140, 565 - 30, 280, 60)
 
-                    if btn_min_time.collidepoint(event.pos):
-                        selected_mode = "min_time"
-                    elif btn_min_moves.collidepoint(event.pos):
-                        selected_mode = "min_moves"
-                    elif btn_max_points.collidepoint(event.pos):
-                        selected_mode = "max_points"
-                    elif btn_iniciar.collidepoint(event.pos):
-                        current_state = STATE_AUTOPLAY
-                        auto_state['level'] = 1
-                        auto_state['step'] = 0
-                        auto_state['path'] = []
-                        auto_state['searching'] = True
-                        auto_state['message'] = f"Iniciando autoplay desde nivel 1: {get_heuristic_label(selected_mode)}"
-                        auto_state['next_move_time'] = pygame.time.get_ticks()
-                        auto_state['nodes'] = 0
-                        auto_state['final_state'] = None
-                        auto_state['level_complete_until'] = 0
-                        auto_state['pending_next_level'] = False
-                        auto_state['completion_text'] = ""
-                        game.current_level_idx = 1
-                        game.load_level(1)
+                    if btn_min_tiempo.collidepoint(evento.pos):
+                        modo_seleccionado = "min_time"
+                    elif btn_min_movs.collidepoint(evento.pos):
+                        modo_seleccionado = "min_moves"
+                    elif btn_max_puntos.collidepoint(evento.pos):
+                        modo_seleccionado = "max_points"
+                    elif btn_iniciar.collidepoint(evento.pos):
+                        estado_actual = STATE_AUTOPLAY
+                        estado_auto['nivel'] = 1
+                        estado_auto['paso'] = 0
+                        estado_auto['ruta'] = []
+                        estado_auto['buscando'] = True
+                        estado_auto['mensaje'] = f"Iniciando autoplay desde nivel 1: {obtener_etiqueta_heuristica(modo_seleccionado)}"
+                        estado_auto['tiempo_siguiente_movimiento'] = pygame.time.get_ticks()
+                        estado_auto['nodos'] = 0
+                        estado_auto['estado_final'] = None
+                        estado_auto['tiempo_fin_nivel'] = 0
+                        estado_auto['pendiente_siguiente_nivel'] = False
+                        estado_auto['texto_completado'] = ""
+                        juego.current_level_idx = 1
+                        juego.load_level(1)
 
-            elif current_state == STATE_AUTOPLAY:
-                if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-                    current_state = STATE_MENU
+            elif estado_actual == STATE_AUTOPLAY:
+                if evento.type == pygame.KEYDOWN and evento.key == pygame.K_ESCAPE:
+                    estado_actual = STATE_MENU
 
-            elif current_state == STATE_LEVEL_SELECT:
-                if event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_ESCAPE:
-                        current_state = STATE_MENU
+            elif estado_actual == STATE_LEVEL_SELECT:
+                if evento.type == pygame.KEYDOWN:
+                    if evento.key == pygame.K_ESCAPE:
+                        estado_actual = STATE_MENU
 
-                if event.type == pygame.MOUSEBUTTONDOWN:
-                    margin, size, gap = 100, 50, 15
+                if evento.type == pygame.MOUSEBUTTONDOWN:
+                    margen, tamano, espacio = 100, 50, 15
                     for i in range(50):
                         col = i % 10
                         row = i // 10
-                        x = margin + col * (size + gap)
-                        y = 200 + row * (size + gap)
-                        level_rect = pygame.Rect(x, y, size, size)
+                        x = margen + col * (tamano + espacio)
+                        y = 200 + row * (tamano + espacio)
+                        rect_nivel = pygame.Rect(x, y, tamano, tamano)
 
-                        if level_rect.collidepoint(event.pos):
-                            game.current_level_idx = i + 1
-                            game.load_level(game.current_level_idx)
-                            current_state = STATE_MENU
+                        if rect_nivel.collidepoint(evento.pos):
+                            juego.current_level_idx = i + 1
+                            juego.load_level(juego.current_level_idx)
+                            estado_actual = STATE_MENU
 
-            elif current_state == STATE_PLAYING:
-                if event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_ESCAPE:
-                        current_state = STATE_MENU
-                    if event.key == pygame.K_r:
-                        game.load_level(game.current_level_idx)
-                    if event.key == pygame.K_u:
-                        game.undo()
+            elif estado_actual == STATE_PLAYING:
+                if evento.type == pygame.KEYDOWN:
+                    if evento.key == pygame.K_ESCAPE:
+                        estado_actual = STATE_MENU
+                    if evento.key == pygame.K_r:
+                        juego.load_level(juego.current_level_idx)
+                    if evento.key == pygame.K_u:
+                        juego.undo()
 
-                    if not game.level_won and not game.is_dead:
-                        if event.key == pygame.K_UP:
-                            game.move(-1, 0)
-                        if event.key == pygame.K_DOWN:
-                            game.move(1, 0)
-                        if event.key == pygame.K_LEFT:
-                            game.move(0, -1)
-                        if event.key == pygame.K_RIGHT:
-                            game.move(0, 1)
+                    if not juego.level_won and not juego.is_dead:
+                        if evento.key == pygame.K_UP:
+                            juego.move(-1, 0)
+                        if evento.key == pygame.K_DOWN:
+                            juego.move(1, 0)
+                        if evento.key == pygame.K_LEFT:
+                            juego.move(0, -1)
+                        if evento.key == pygame.K_RIGHT:
+                            juego.move(0, 1)
 
-                    if game.level_won and event.key == pygame.K_SPACE:
-                        if game.current_level_idx < 50:
-                            game.current_level_idx += 1
-                            game.load_level(game.current_level_idx)
+                    if juego.level_won and evento.key == pygame.K_SPACE:
+                        if juego.current_level_idx < 50:
+                            juego.current_level_idx += 1
+                            juego.load_level(juego.current_level_idx)
                         else:
                             print("¡Felicidades! Has completado todos los niveles.")
-                            game.draw_overlay(screen, "¡ERES UN MAESTRO!", f"Movs Totales: {game.moves_count} | Gracias por jugar")
+                            juego.draw_overlay(pantalla, "¡ERES UN MAESTRO!", f"Movs Totales: {juego.moves_count} | Gracias por jugar")
 
-        screen.blit(background, (0, 0))
+        pantalla.blit(fondo, (0, 0))
 
-        if current_state == STATE_MENU:
-            panel_w, panel_h = 760, 500
-            panel_x = SCREEN_WIDTH // 2 - panel_w // 2
+        if estado_actual == STATE_MENU:
+            panel_ancho, panel_alto = 760, 500
+            panel_x = SCREEN_WIDTH // 2 - panel_ancho // 2
             panel_y = 100
-            draw_panel(screen, panel_x, panel_y, panel_w, panel_h)
+            dibujar_panel(pantalla, panel_x, panel_y, panel_ancho, panel_alto)
 
-            draw_text(screen, "SOKOBAN", title_font, COLOR_PLAYER, SCREEN_WIDTH // 2, 170)
-            draw_text(screen, "Creado por: huevoscartoon", small_font, COLOR_TEXT, SCREEN_WIDTH // 2, 215)
-            draw_button(screen, "JUGAR", menu_font, SCREEN_WIDTH // 2, 340, 260, 65, mouse_pos)
-            draw_button(screen, "HEURÍSTICA", menu_font, SCREEN_WIDTH // 2, 425, 260, 65, mouse_pos)
-            draw_button(screen, "NIVELES", menu_font, SCREEN_WIDTH // 2, 510, 260, 65, mouse_pos)
-            draw_text(screen, f"Nivel Seleccionado: {game.current_level_idx}", small_font, COLOR_TARGET, SCREEN_WIDTH // 2, 580)
-            draw_text(screen, f"Heurística: {get_heuristic_label(selected_mode)}", small_font, COLOR_TEXT, SCREEN_WIDTH // 2, 610)
+            dibujar_texto(pantalla, "SOKOBAN", fuente_titulo, COLOR_PLAYER, SCREEN_WIDTH // 2, 170)
+            dibujar_texto(pantalla, "Creado por: huevoscartoon", fuente_pequena, COLOR_TEXT, SCREEN_WIDTH // 2, 215)
+            dibujar_boton(pantalla, "JUGAR", fuente_menu, SCREEN_WIDTH // 2, 340, 260, 65, posicion_mouse)
+            dibujar_boton(pantalla, "HEURÍSTICA", fuente_menu, SCREEN_WIDTH // 2, 425, 260, 65, posicion_mouse)
+            dibujar_boton(pantalla, "NIVELES", fuente_menu, SCREEN_WIDTH // 2, 510, 260, 65, posicion_mouse)
+            dibujar_texto(pantalla, f"Nivel Seleccionado: {juego.current_level_idx}", fuente_pequena, COLOR_TARGET, SCREEN_WIDTH // 2, 580)
+            dibujar_texto(pantalla, f"Heurística: {obtener_etiqueta_heuristica(modo_seleccionado)}", fuente_pequena, COLOR_TEXT, SCREEN_WIDTH // 2, 610)
 
-        elif current_state == STATE_HEURISTIC_CONFIG:
-            panel_w, panel_h = 900, 620
-            panel_x = SCREEN_WIDTH // 2 - panel_w // 2
+        elif estado_actual == STATE_HEURISTIC_CONFIG:
+            panel_ancho, panel_alto = 900, 620
+            panel_x = SCREEN_WIDTH // 2 - panel_ancho // 2
             panel_y = 80
-            draw_panel(screen, panel_x, panel_y, panel_w, panel_h)
+            dibujar_panel(pantalla, panel_x, panel_y, panel_ancho, panel_alto)
 
-            draw_text(screen, "CONFIGURAR HEURÍSTICA", config_title_font, COLOR_PLAYER, SCREEN_WIDTH // 2, 165)
-            draw_text(screen, "Elige una sola modalidad de búsqueda automática.", small_font, COLOR_TEXT, SCREEN_WIDTH // 2, 220)
-            draw_text(screen, "Luego pulsa INICIAR para ejecutar autoplay desde el nivel 1.", small_font, COLOR_TEXT, SCREEN_WIDTH // 2, 245)
-            draw_text(screen, "Los puntos se recolectan pasando por las casillas con 'S'.", small_font, COLOR_TEXT, SCREEN_WIDTH // 2, 270)
+            dibujar_texto(pantalla, "CONFIGURAR HEURÍSTICA", fuente_titulo_config, COLOR_PLAYER, SCREEN_WIDTH // 2, 165)
+            dibujar_texto(pantalla, "Elige una sola modalidad de búsqueda automática.", fuente_pequena, COLOR_TEXT, SCREEN_WIDTH // 2, 220)
+            dibujar_texto(pantalla, "Luego pulsa INICIAR para ejecutar autoplay desde el nivel 1.", fuente_pequena, COLOR_TEXT, SCREEN_WIDTH // 2, 245)
+            dibujar_texto(pantalla, "Los puntos se recolectan pasando por las casillas con 'S'.", fuente_pequena, COLOR_TEXT, SCREEN_WIDTH // 2, 270)
 
-            draw_text(screen, "Modo:", menu_font, COLOR_TEXT, SCREEN_WIDTH // 2, 315)
-            draw_button(
-                screen,
+            dibujar_texto(pantalla, "Modo:", fuente_menu, COLOR_TEXT, SCREEN_WIDTH // 2, 315)
+            dibujar_boton(
+                pantalla,
                 "MINIMIZAR TIEMPO",
-                menu_font,
+                fuente_menu,
                 SCREEN_WIDTH // 2 - 300,
                 360,
                 250,
                 58,
-                mouse_pos,
-                active=(selected_mode == "min_time")
+                posicion_mouse,
+                activo=(modo_seleccionado == "min_time")
             )
-            draw_button(
-                screen,
+            dibujar_boton(
+                pantalla,
                 "MINIMIZAR MOVS.",
-                menu_font,
+                fuente_menu,
                 SCREEN_WIDTH // 2,
                 360,
                 250,
                 58,
-                mouse_pos,
-                active=(selected_mode == "min_moves")
+                posicion_mouse,
+                activo=(modo_seleccionado == "min_moves")
             )
-            draw_button(
-                screen,
+            dibujar_boton(
+                pantalla,
                 "MAXIMIZAR PUNTOS",
-                menu_font,
+                fuente_menu,
                 SCREEN_WIDTH // 2 + 300,
                 360,
                 250,
                 58,
-                mouse_pos,
-                active=(selected_mode == "max_points")
+                posicion_mouse,
+                activo=(modo_seleccionado == "max_points")
             )
 
-            draw_button(screen, "INICIAR", menu_font, SCREEN_WIDTH // 2, 565, 320, 65, mouse_pos)
-            draw_text(screen, "Presiona ESC para volver al menú", small_font, (180, 180, 180), SCREEN_WIDTH // 2, 635)
-            draw_text(screen, f"Seleccionado: {get_heuristic_label(selected_mode)}", small_font, COLOR_TARGET, SCREEN_WIDTH // 2, 690)
+            dibujar_boton(pantalla, "INICIAR", fuente_menu, SCREEN_WIDTH // 2, 565, 320, 65, posicion_mouse)
+            dibujar_texto(pantalla, "Presiona ESC para volver al menú", fuente_pequena, (180, 180, 180), SCREEN_WIDTH // 2, 635)
+            dibujar_texto(pantalla, f"Seleccionado: {obtener_etiqueta_heuristica(modo_seleccionado)}", fuente_pequena, COLOR_TARGET, SCREEN_WIDTH // 2, 690)
 
-        elif current_state == STATE_AUTOPLAY:
-            game.draw(screen)
-            draw_text(screen, "AUTOPLAY ACTIVADO", menu_font, COLOR_PLAYER, SCREEN_WIDTH // 2, 80)
-            draw_text(screen, f"Nivel automático: {auto_state['level']}", small_font, COLOR_TEXT, SCREEN_WIDTH // 2, 110)
-            draw_text(screen, auto_state['message'], small_font, COLOR_TEXT, SCREEN_WIDTH // 2, 135)
-            if auto_state['completion_text']:
-                draw_text(screen, auto_state['completion_text'], small_font, COLOR_TARGET, SCREEN_WIDTH // 2, 160)
+        elif estado_actual == STATE_AUTOPLAY:
+            juego.draw(pantalla)
+            dibujar_texto(pantalla, "AUTOPLAY ACTIVADO", fuente_menu, COLOR_PLAYER, SCREEN_WIDTH // 2, 80)
+            dibujar_texto(pantalla, f"Nivel automático: {estado_auto['nivel']}", fuente_pequena, COLOR_TEXT, SCREEN_WIDTH // 2, 110)
+            dibujar_texto(pantalla, estado_auto['mensaje'], fuente_pequena, COLOR_TEXT, SCREEN_WIDTH // 2, 135)
+            if estado_auto['texto_completado']:
+                dibujar_texto(pantalla, estado_auto['texto_completado'], fuente_pequena, COLOR_TARGET, SCREEN_WIDTH // 2, 160)
 
-            if auto_state['searching']:
-                draw_text(screen, "Buscando solución... Esto puede tomar algunos segundos.", small_font, COLOR_BTN_HOVER, SCREEN_WIDTH // 2, 190)
+            if estado_auto['buscando']:
+                dibujar_texto(pantalla, "Buscando solución... Esto puede tomar algunos segundos.", fuente_pequena, COLOR_BTN_HOVER, SCREEN_WIDTH // 2, 190)
 
-            if auto_state['path']:
-                draw_text(screen, f"Pasos: {len(auto_state['path'])}  Nodo(s): {auto_state['nodes']}", small_font, COLOR_TARGET, SCREEN_WIDTH // 2, 215)
+            if estado_auto['ruta']:
+                dibujar_texto(pantalla, f"Pasos: {len(estado_auto['ruta'])}  Nodo(s): {estado_auto['nodos']}", fuente_pequena, COLOR_TARGET, SCREEN_WIDTH // 2, 215)
 
-            draw_text(screen, "Presiona ESC para detener autoplay", small_font, (180, 180, 180), SCREEN_WIDTH // 2, 710)
+            dibujar_texto(pantalla, "Presiona ESC para detener autoplay", fuente_pequena, (180, 180, 180), SCREEN_WIDTH // 2, 710)
 
-            if auto_state['searching']:
-                limits = LEVEL_SEARCH_LIMITS.get(selected_mode, LEVEL_SEARCH_LIMITS['min_time'])
-                solution, nodes, final_state = find_greedy_solution(
-                    game,
-                    selected_mode,
-                    max_nodes=limits['max_nodes'],
-                    max_time=limits['max_time'],
-                    max_depth=limits['max_depth']
+            if estado_auto['buscando']:
+                limites = LIMITES_BUSQUEDA_NIVELES.get(modo_seleccionado, LIMITES_BUSQUEDA_NIVELES['min_time'])
+                solucion, nodos, estado_final = encontrar_solucion_voraz(
+                    juego,
+                    modo_seleccionado,
+                    max_nodos=limites['max_nodes'],
+                    max_tiempo=limites['max_time'],
+                    max_profundidad=limites['max_depth']
                 )
-                auto_state['nodes'] = nodes
-                auto_state['final_state'] = final_state
-                auto_state['searching'] = False
+                estado_auto['nodos'] = nodos
+                estado_auto['estado_final'] = estado_final
+                estado_auto['buscando'] = False
 
-                if solution:
-                    auto_state['path'] = solution
-                    auto_state['step'] = 0
-                    auto_state['message'] = f"Solución encontrada: {len(solution)} pasos"
-                    auto_state['next_move_time'] = pygame.time.get_ticks()
+                if solucion:
+                    estado_auto['ruta'] = solucion
+                    estado_auto['paso'] = 0
+                    estado_auto['mensaje'] = f"Solución encontrada: {len(solucion)} pasos"
+                    estado_auto['tiempo_siguiente_movimiento'] = pygame.time.get_ticks()
                 else:
-                    auto_state['message'] = f"No se encontró solución en este nivel ({nodes} nodos). Presiona ESC."
-                    auto_state['path'] = []
+                    estado_auto['mensaje'] = f"No se encontró solución en este nivel ({nodos} nodos). Presiona ESC."
+                    estado_auto['ruta'] = []
 
-            elif pygame.time.get_ticks() >= auto_state['next_move_time']:
+            elif pygame.time.get_ticks() >= estado_auto['tiempo_siguiente_movimiento']:
 
                 # --- NIVEL COMPLETADO ---
-                if game.level_won:
-                    if auto_state['level_complete_until'] == 0:
-                        route_str = path_to_string(auto_state['path'])
-                        _, cost_str = calculate_solution_cost(
-                            auto_state['final_state'],
-                            auto_state['path'],
-                            selected_mode
+                if juego.level_won:
+                    if estado_auto['tiempo_fin_nivel'] == 0:
+                        cadena_ruta = ruta_a_cadena(estado_auto['ruta'])
+                        _, cadena_costo = calcular_costo_solucion(
+                            estado_auto['estado_final'],
+                            estado_auto['ruta'],
+                            modo_seleccionado
                         )
 
-                        print(f"[Nivel {auto_state['level']}] Ruta: {route_str}")
-                        print(f"[Nivel {auto_state['level']}] Costo: {cost_str}")
-                        print(f"[Nivel {auto_state['level']}] Nodos: {auto_state['nodes']}")
+                        print(f"[Nivel {estado_auto['nivel']}] Ruta: {cadena_ruta}")
+                        print(f"[Nivel {estado_auto['nivel']}] Costo: {cadena_costo}")
+                        print(f"[Nivel {estado_auto['nivel']}] Nodos: {estado_auto['nodos']}")
                         print()
 
-                        auto_state['message'] = f"✔ Nivel {auto_state['level']} completado"
-                        auto_state['completion_text'] = cost_str
-                        auto_state['level_complete_until'] = pygame.time.get_ticks() + 1800
-                        auto_state['path'] = []
+                        estado_auto['mensaje'] = f"✔ Nivel {estado_auto['nivel']} completado"
+                        estado_auto['texto_completado'] = cadena_costo
+                        estado_auto['tiempo_fin_nivel'] = pygame.time.get_ticks() + 1800
+                        estado_auto['ruta'] = []
 
-                    elif pygame.time.get_ticks() >= auto_state['level_complete_until']:
-                        auto_state['level_complete_until'] = 0
-                        auto_state['completion_text'] = ""
+                    elif pygame.time.get_ticks() >= estado_auto['tiempo_fin_nivel']:
+                        estado_auto['tiempo_fin_nivel'] = 0
+                        estado_auto['texto_completado'] = ""
 
-                        if auto_state['level'] < 50:
-                            auto_state['level'] += 1
-                            game.current_level_idx = auto_state['level']
-                            game.load_level(auto_state['level'])
-                            auto_state['searching'] = True
-                            auto_state['message'] = f"Nivel {auto_state['level']}..."
-                            auto_state['step'] = 0
-                            auto_state['final_state'] = None
+                        if estado_auto['nivel'] < 50:
+                            estado_auto['nivel'] += 1
+                            juego.current_level_idx = estado_auto['nivel']
+                            juego.load_level(estado_auto['nivel'])
+                            estado_auto['buscando'] = True
+                            estado_auto['mensaje'] = f"Nivel {estado_auto['nivel']}..."
+                            estado_auto['paso'] = 0
+                            estado_auto['estado_final'] = None
                         else:
-                            auto_state['message'] = "Autoplay completado"
-                            auto_state['completion_text'] = "✔ Todos los niveles"
+                            estado_auto['mensaje'] = "Autoplay completado"
+                            estado_auto['texto_completado'] = "✔ Todos los niveles"
                             print("[Autoplay] Completado")
 
                 # --- EJECUTAR RUTA ---
-                elif auto_state['path'] and auto_state['step'] < len(auto_state['path']):
-                    dr, dc = auto_state['path'][auto_state['step']]
-                    game.move(dr, dc)
-                    auto_state['step'] += 1
-                    auto_state['next_move_time'] = pygame.time.get_ticks() + 180
+                elif estado_auto['ruta'] and estado_auto['paso'] < len(estado_auto['ruta']):
+                    dr, dc = estado_auto['ruta'][estado_auto['paso']]
+                    juego.move(dr, dc)
+                    estado_auto['paso'] += 1
+                    estado_auto['tiempo_siguiente_movimiento'] = pygame.time.get_ticks() + 180
 
                 else:
-                    auto_state['message'] = "No se pudo ejecutar la ruta"
-                    auto_state['path'] = []
+                    estado_auto['mensaje'] = "No se pudo ejecutar la ruta"
+                    estado_auto['ruta'] = []
 
-            elif not auto_state['path'] and not auto_state['searching'] and not game.level_won:
-                auto_state['message'] = "No se puede resolver este nivel automáticamente."
+            elif not estado_auto['ruta'] and not estado_auto['buscando'] and not juego.level_won:
+                estado_auto['mensaje'] = "No se puede resolver este nivel automáticamente."
 
-        elif current_state == STATE_LEVEL_SELECT:
-            draw_text(screen, "SELECCIONA UN NIVEL", menu_font, COLOR_TEXT, SCREEN_WIDTH // 2, 100)
+        elif estado_actual == STATE_LEVEL_SELECT:
+            dibujar_texto(pantalla, "SELECCIONA UN NIVEL", fuente_menu, COLOR_TEXT, SCREEN_WIDTH // 2, 100)
 
-            margin, size, gap = 100, 50, 15
+            margen, tamano, espacio = 100, 50, 15
             for i in range(50):
-                lvl_num = i + 1
+                numero_nivel = i + 1
                 col = i % 10
                 row = i // 10
-                x = margin + col * (size + gap)
-                y = 200 + row * (size + gap)
+                x = margen + col * (tamano + espacio)
+                y = 200 + row * (tamano + espacio)
 
-                rect = pygame.Rect(x, y, size, size)
+                rectangulo = pygame.Rect(x, y, tamano, tamano)
 
-                if rect.collidepoint(mouse_pos):
+                if rectangulo.collidepoint(posicion_mouse):
                     color = COLOR_PLAYER
-                elif lvl_num == game.current_level_idx:
+                elif numero_nivel == juego.current_level_idx:
                     color = COLOR_TARGET
                 else:
                     color = COLOR_BTN
 
-                pygame.draw.rect(screen, color, rect, border_radius=5)
-                draw_text(screen, str(lvl_num), level_num_font, COLOR_TEXT, x + size // 2, y + size // 2)
+                pygame.draw.rect(pantalla, color, rectangulo, border_radius=5)
+                dibujar_texto(pantalla, str(numero_nivel), fuente_numero_nivel, COLOR_TEXT, x + tamano // 2, y + tamano // 2)
 
-            draw_text(screen, "Presiona ESC para volver al menú", small_font, (150, 150, 150), SCREEN_WIDTH // 2, 700)
+            dibujar_texto(pantalla, "Presiona ESC para volver al menú", fuente_pequena, (150, 150, 150), SCREEN_WIDTH // 2, 700)
 
-        elif current_state == STATE_PLAYING:
-            game.draw(screen)
+        elif estado_actual == STATE_PLAYING:
+            juego.draw(pantalla)
 
         pygame.display.flip()
-        clock.tick(FPS)
+        reloj.tick(FPS)
 
 
 if __name__ == "__main__":

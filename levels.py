@@ -349,7 +349,6 @@ LEVEL_DATA = {
         "W.............W",
         "W....MMM......W",
         "W.....P.......W",
-        "W.............W",
         "W......T......W",
         "W.............W",
         "WWWWWWWWWWWWWWW"
@@ -362,7 +361,6 @@ LEVEL_DATA = {
         "W..B.......B..W",
         "W......P......W",
         "W..MMM.MMM....W",
-        "W.............W",
         "W.............W",
         "W.............W",
         "W.............W",
@@ -379,7 +377,6 @@ LEVEL_DATA = {
         "W....I.P......W",
         "W....III......W",
         "W.............W",
-        "W.............W",
         "WWWWWWWWWWWWWWW"
     ],
 
@@ -391,7 +388,6 @@ LEVEL_DATA = {
         "W....M...M....W",
         "W....MMM......W",
         "W......P......W",
-        "W.............W",
         "W.............W",
         "W.............W",
         "WWWWWWWWWWWWWWW"
@@ -407,15 +403,14 @@ LEVEL_DATA = {
         "W......P......W",
         "W.............W",
         "W.............W",
-        "W.............W",
         "WWWWWWWWWWWWWWW"
     ],
 
     36: [
-        "WWWWWWWWWWWWWWWWWW",
-        "W.T....M....T....W",
-        "W..MMMMMMMMM.....W",
-        "W..B.......B.....W",
+        "WWWWWWWWWWWWWWWWW",
+        "W.T....M....T...W",
+        "W..MMMMMMMMM....W",
+        "W..B.......B....W",
         "W...............W",
         "W....IIII.......W",
         "W....I..I.......W",
@@ -423,7 +418,7 @@ LEVEL_DATA = {
         "W....IIII.......W",
         "W...............W",
         "W...............W",
-        "WWWWWWWWWWWWWWWWWW"
+        "WWWWWWWWWWWWWWWWW"
     ],
 
     37: [
@@ -434,10 +429,8 @@ LEVEL_DATA = {
         "W....M.....M.....W",
         "W....MMM.........W",
         "W........P.......W",
-        "W...............W",
-        "W...............W",
-        "W...............W",
-        "W...............W",
+        "W................W",
+        "W................W",
         "WWWWWWWWWWWWWWWWWW"
     ],
 
@@ -450,9 +443,7 @@ LEVEL_DATA = {
         "W....M.M.........W",
         "W....M.P.........W",
         "W....MMM.........W",
-        "W...............W",
-        "W...............W",
-        "W...............W",
+        "W................W",
         "WWWWWWWWWWWWWWWWWW"
     ],
 
@@ -465,9 +456,8 @@ LEVEL_DATA = {
         "W....H.H.........W",
         "W....H.P.........W",
         "W....HHH.........W",
-        "W...............W",
-        "W...............W",
-        "W...............W",
+        "W................W",
+        "W..........SS....W",
         "WWWWWWWWWWWWWWWWWW"
     ],
 
@@ -480,11 +470,102 @@ LEVEL_DATA = {
         "W....I.I.....I.I...W",
         "W....I.P.....I.I...W",
         "W....III.....III...W",
-        "W.................W",
-        "W.................W",
-        "W.................W",
+        "W..................W",
+        "W..................W",
         "WWWWWWWWWWWWWWWWWWWW"
-    ]
+    ],
+    41: [
+        "WWWWWWWWWWWWWWWWWWWW",
+        "W.T......MMM......TW",
+        "W....LLLLLLLLLLL...W",
+        "W..B.............B.W",
+        "W....III.....III...W",
+        "W....I.I.....I.I...W",
+        "W....I.P.....I.I...W",
+        "W....III.....III...W",
+        "W..................W",
+        "W..................W",
+        "WWWWWWWWWWWWWWWWWWWW"
+    ],
+
+    42: [
+        "WWWWWWWWWWWWWWWWWWWW",
+        "W.T......MMM......TW",
+        "W....LLLLLLLLLLL...W",
+        "W..B.............B.W",
+        "W....III.....III...W",
+        "W....I.I.....I.I...W",
+        "W....I.P.....I.I...W",
+        "W....III.....III...W",
+        "W..................W",
+        "W..................W",
+        "WWWWWWWWWWWWWWWWWWWW"
+    ],
+    43: [
+        "WWWWWWWWWWWWWWWWWWWW",
+        "W.T......MMM......TW",
+        "W....LLLLLLLLLLL...W",
+        "W..B.............B.W",
+        "W....III.....III...W",
+        "W....I.I.....I.I...W",
+        "W....I.P.....I.I...W",
+        "W....III.....III...W",
+        "W..................W",
+        "W..................W",
+        "WWWWWWWWWWWWWWWWWWWW"
+    ],
+    44: [
+        "WWWWWWWWWWWWWWWWWWWW",
+        "W.T......MMM......TW",
+        "W....LLLLLLLLLLL...W",
+        "W..B.............B.W",
+        "W....III.....III...W",
+        "W....I.I.....I.I...W",
+        "W....I.P.....I.I...W",
+        "W....III.....III...W",
+        "W..................W",
+        "W..................W",
+        "WWWWWWWWWWWWWWWWWWWW"
+    ],
+    45: [
+        "WWWWWWWWWWWWWWWWWWWW",
+        "W.T......MMM......TW",
+        "W....LLLLLLLLLLL...W",
+        "W..B.............B.W",
+        "W....III.....III...W",
+        "W....I.I.....I.I...W",
+        "W....I.P.....I.I...W",
+        "W....III.....III...W",
+        "W..................W",
+        "W..................W",
+        "WWWWWWWWWWWWWWWWWWWW"
+    ],
+    46: [
+        "WWWWWWWWWWWWWWWWWWWW",
+        "W.T......MMM......TW",
+        "W....LLLLLLLLLLL...W",
+        "W..B.............B.W",
+        "W....III.....III...W",
+        "W....I.I.....I.I...W",
+        "W....I.P.....I.I...W",
+        "W....III.....III...W",
+        "W..................W",
+        "W..................W",
+        "WWWWWWWWWWWWWWWWWWWW"
+    ],
+    47: [
+        "WWWWWWWWWWWWWWWWWWWW",
+        "W.T......MMM......TW",
+        "W....LLLLLLLLLLL...W",
+        "W..B.............B.W",
+        "W....III.....III...W",
+        "W....I.I.....I.I...W",
+        "W....I.P.....I.I...W",
+        "W....III.....III...W",
+        "W..................W",
+        "W..................W",
+        "WWWWWWWWWWWWWWWWWWWW"
+    ],
 }
 
 def get_level(num):
